@@ -346,8 +346,8 @@ export default function HomePage() {
       } catch (error) {
         setApiError(error instanceof Error ? `Project deleted, but the project list could not be refreshed: ${error.message}` : 'Project deleted, but the project list could not be refreshed.');
       }
-    } catch (error) {
-      setApiError(error instanceof Error ? error.message : 'Could not delete the project.');
+    } catch {
+      setApiError('Failed to delete project');
     } finally {
       setDeletingProjectId(null);
     }

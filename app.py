@@ -164,26 +164,30 @@ def delete_project(project_id):
     if not user:
         return auth_error()
 
-    project_result = (supabase.table("projects").select("id,manuscript_path")
-                      .eq("id", project_id).eq("user_id", user.id).limit(1).execute())
-    if not project_result.data:
-        return jsonify({"error": "Project not found"}), 404
-    project = project_result.data[0]
-    chapter_result = (supabase.table("chapters").select("audio_path")
-                      .eq("project_id", project_id).execute())
+    try:
+        project_result = (supabase.table("projects").select("id,manuscript_path")
+                          .eq("id", project_id).eq("user_id", user.id).limit(1).execute())
+        if not project_result.data:
+            return jsonify({"error": "Project not found"}), 404
+        project = project_result.data[0]
+        chapter_result = (supabase.table("chapters").select("audio_path")
+                          .eq("project_id", project_id).execute())
 
-    owned_path_prefix = f"{user.id}/{project_id}/"
-    manuscript_path = project.get("manuscript_path")
-    manuscript_paths = ([manuscript_path] if isinstance(manuscript_path, str)
-                        and manuscript_path.startswith(owned_path_prefix) else [])
-    render_paths = [
-        chapter["audio_path"] for chapter in chapter_result.data or []
-        if isinstance(chapter.get("audio_path"), str)
-        and chapter["audio_path"].startswith(owned_path_prefix)
-    ]
+        owned_path_prefix = f"{user.id}/{project_id}/"
+        manuscript_path = project.get("manuscript_path")
+        manuscript_paths = ([manuscript_path] if isinstance(manuscript_path, str)
+                            and manuscript_path.startswith(owned_path_prefix) else [])
+        render_paths = [
+            chapter["audio_path"] for chapter in chapter_result.data or []
+            if isinstance(chapter.get("audio_path"), str)
+            and chapter["audio_path"].startswith(owned_path_prefix)
+        ]
 
-    supabase.table("chapters").delete().eq("project_id", project_id).execute()
-    supabase.table("projects").delete().eq("id", project_id).eq("user_id", user.id).execute()
+        supabase.table("chapters").delete().eq("project_id", project_id).execute()
+        supabase.table("projects").delete().eq("id", project_id).eq("user_id", user.id).execute()
+    except Exception as exc:
+        app.logger.exception("Could not delete project %s", project_id)
+        return jsonify({"error": f"Failed to delete project: {exc}"}), 500
 
     storage_cleanup_errors = []
     for bucket, paths in (("manuscripts", manuscript_paths), ("renders", render_paths)):

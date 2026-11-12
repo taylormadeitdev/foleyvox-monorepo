@@ -1,0 +1,108 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap');
+
+:root {
+  /* Overlay layers */
+  --z-overlay: 400;
+
+  --z-spotlight: 1000; /* Tutorial spotlights/guided help */
+
+  /* System layers */
+  --z-critical: 2000; /* Critical system notifications */
+
+  /* spacing */
+  --spacing-1: 0.25rem;
+  --spacing-2: 0.5rem;
+  --spacing-3: 0.75rem;
+  --spacing-4: 1rem;
+  --spacing-6: 1.5rem;
+  --spacing-8: 2rem;
+  --spacing-12: 3rem;
+  --spacing-16: 4rem;
+  --spacing-20: 5rem;
+}
+
+:root {
+  color-scheme: dark;
+  --background: #121212;
+  --foreground: #eee9df;
+  --surface: #191919;
+  --surface-foreground: #eee9df;
+  --sidebar: #151515;
+  --sidebar-foreground: #d7d0c5;
+  --card: #1b1a18;
+  --card-foreground: #eee9df;
+  --popup: #201e1b;
+  --popup-foreground: #f4eee4;
+  --primary: #ffb300;
+  --primary-foreground: #1b1406;
+  --secondary: #292725;
+  --secondary-foreground: #e7dfd2;
+  --accent: #382a12;
+  --accent-foreground: #ffd17a;
+  --muted: #242321;
+  --muted-foreground: #99938a;
+  --success: #3e9b64;
+  --success-foreground: #d7f4df;
+  --error: #c65b51;
+  --error-foreground: #ffe5e0;
+  --warning: #d9952b;
+  --warning-foreground: #ffe2a8;
+  --info: #438cc8;
+  --info-foreground: #d9edff;
+  --info-hover: #347bb5;
+  --info-active: #28699d;
+  --border: #34312c;
+  --font-family-base: 'DM Sans', sans-serif;
+  --font-family-display: 'Instrument Serif', Georgia, serif;
+  --font-family-monospace: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-family-cursive: 'Instrument Serif', Georgia, serif;
+  --shadow: 0 8px 24px rgba(0,0,0,.28);
+  --shadow-md: 0 14px 38px rgba(0,0,0,.36);
+  --shadow-lg: 0 24px 70px rgba(0,0,0,.52);
+  --shadow-focus: 0 0 0 3px rgba(255,179,0,.2);
+  --radius-sm: .4rem;
+  --radius: .65rem;
+  --radius-md: .85rem;
+  --radius-lg: 1.15rem;
+  --radius-full: 9999px;
+  --animation-duration-fast: 140ms;
+  --animation-duration-normal: 240ms;
+  --animation-duration-slow: 520ms;
+  --chart-color-1: #ffb300;
+  --chart-color-2: #438c68;
+  --chart-color-3: #4d91c8;
+  --chart-color-4: #a28a70;
+  --chart-color-5: #c56c48;
+}
+
+.dark {
+  --background: #121212;
+  --foreground: #eee9df;
+  --surface: #191919;
+  --surface-foreground: #eee9df;
+  --sidebar: #151515;
+  --sidebar-foreground: #d7d0c5;
+  --card: #1b1a18;
+  --card-foreground: #eee9df;
+  --popup: #201e1b;
+  --popup-foreground: #f4eee4;
+  --primary: #ffb300;
+  --primary-foreground: #1b1406;
+  --secondary: #292725;
+  --secondary-foreground: #e7dfd2;
+  --accent: #382a12;
+  --accent-foreground: #ffd17a;
+  --muted: #242321;
+  --muted-foreground: #99938a;
+  --success: #3e9b64;
+  --success-foreground: #d7f4df;
+  --error: #c65b51;
+  --error-foreground: #ffe5e0;
+  --warning: #d9952b;
+  --warning-foreground: #ffe2a8;
+  --info: #438cc8;
+  --info-foreground: #d9edff;
+  --info-hover: #347bb5;
+  --info-active: #28699d;
+  --border: #34312c;
+}

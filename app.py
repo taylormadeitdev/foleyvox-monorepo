@@ -158,6 +158,50 @@ def get_studio_data(project_id, chapter_num):
     return jsonify(chapter)
 
 
+@app.delete("/api/projects/<project_id>")
+def delete_project(project_id):
+    user = current_user()
+    if not user:
+        return auth_error()
+
+    project_result = (supabase.table("projects").select("id,manuscript_path")
+                      .eq("id", project_id).eq("user_id", user.id).limit(1).execute())
+    if not project_result.data:
+        return jsonify({"error": "Project not found"}), 404
+    project = project_result.data[0]
+    chapter_result = (supabase.table("chapters").select("audio_path")
+                      .eq("project_id", project_id).execute())
+
+    owned_path_prefix = f"{user.id}/{project_id}/"
+    manuscript_path = project.get("manuscript_path")
+    manuscript_paths = ([manuscript_path] if isinstance(manuscript_path, str)
+                        and manuscript_path.startswith(owned_path_prefix) else [])
+    render_paths = [
+        chapter["audio_path"] for chapter in chapter_result.data or []
+        if isinstance(chapter.get("audio_path"), str)
+        and chapter["audio_path"].startswith(owned_path_prefix)
+    ]
+
+    supabase.table("chapters").delete().eq("project_id", project_id).execute()
+    supabase.table("projects").delete().eq("id", project_id).eq("user_id", user.id).execute()
+
+    storage_cleanup_errors = []
+    for bucket, paths in (("manuscripts", manuscript_paths), ("renders", render_paths)):
+        if not paths:
+            continue
+        try:
+            supabase.storage.from_(bucket).remove(paths)
+        except Exception:
+            app.logger.exception("Could not clean up project files in the %s bucket", bucket)
+            storage_cleanup_errors.append(bucket)
+
+    return jsonify({
+        "status": "deleted",
+        "project_id": project_id,
+        "storage_cleanup_errors": storage_cleanup_errors,
+    })
+
+
 @app.post("/api/rerender")
 def rerender():
     user = current_user()

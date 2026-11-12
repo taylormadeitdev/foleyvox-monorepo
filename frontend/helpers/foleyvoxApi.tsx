@@ -89,6 +89,10 @@ export const foleyvoxApi = {
   async listProjects(token: string) {
     return supabaseFetch("/rest/v1/projects?select=*&order=created_at.desc", {}, token) as Promise<any[]>;
   },
+  async deleteProject(token: string, projectId: string) {
+    const response = await apiFetch(`/api/projects/${encodeURIComponent(projectId)}`, token, { method: "DELETE" });
+    return response.json();
+  },
   async cloneDemo(token: string): Promise<{ project_id: string }> {
     const response = await apiFetch("/api/clone-demo", token, { method: "POST" });
     return response.json();

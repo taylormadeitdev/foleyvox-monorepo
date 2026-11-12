@@ -30,9 +30,9 @@ const femaleVoiceIds = [
   'fr-FR-DeniseNeural', 'es-ES-ElviraNeural', 'es-MX-DaliaNeural', 'de-DE-KatjaNeural',
 ];
 const maleVoiceIds = [
-  'en-US-GuyNeural', 'en-US-ChristopherNeural', 'en-US-EricNeural', 'en-US-RogerNeural',
+  'en-GB-RyanNeural', 'en-US-GuyNeural', 'en-US-ChristopherNeural', 'en-US-EricNeural', 'en-US-RogerNeural',
   'en-US-TonyNeural', 'en-US-AndrewNeural', 'en-US-BrianNeural', 'en-US-SteffanNeural',
-  'en-GB-RyanNeural', 'en-GB-ThomasNeural',
+  'en-GB-ThomasNeural',
   'en-AU-WilliamNeural', 'en-AU-DuncanNeural', 'en-CA-LiamNeural', 'en-IE-ConnorNeural',
   'en-IN-PrabhatNeural', 'ar-AE-HamdanNeural', 'ar-SA-HamedNeural', 'de-DE-ConradNeural',
   'es-ES-AlvaroNeural', 'es-MX-JorgeNeural', 'fr-FR-HenriNeural', 'it-IT-DiegoNeural',
@@ -46,6 +46,8 @@ const getVoiceGender = (voiceId: unknown) => {
   if (maleVoiceIds.includes(id)) return 'Male';
   return undefined;
 };
+const getDefaultVoiceId = (gender: unknown) =>
+  String(gender || '').toLowerCase() === 'male' ? 'en-GB-RyanNeural' : 'en-US-AriaNeural';
 const shuffleVoiceIds = (voiceIds: string[]) => {
   const shuffled = [...voiceIds];
   for (let index = shuffled.length - 1; index > 0; index--) {
@@ -73,6 +75,61 @@ const statusLabel = (status: unknown) => {
   if (value === 'ready' || value === 'completed') return 'Ready';
   return value ? value.charAt(0).toUpperCase() + value.slice(1) : '—';
 };
+
+function blueprintHasCharacter(blueprint: any, name: string) {
+  if (!blueprint || typeof blueprint !== 'object') return false;
+  const keyedCollections = ['cast', 'canonical_cast', 'character_voices', 'characters'];
+  if (keyedCollections.some((key) => {
+    const collection = blueprint[key];
+    return collection && typeof collection === 'object' && !Array.isArray(collection) && Object.hasOwn(collection, name);
+  })) return true;
+  if (Array.isArray(blueprint.characters) && blueprint.characters.some((item: any) =>
+    typeof item === 'string' ? item === name : [item?.name, item?.character, item?.id].includes(name))) return true;
+  return Array.isArray(blueprint.script) && blueprint.script.some((line: any) => line?.speaker === name);
+}
+
+function renameCharacterInBlueprint(blueprint: any, oldName: string, newName: string) {
+  if (!blueprint || typeof blueprint !== 'object' || Array.isArray(blueprint)) return null;
+  const updated = { ...blueprint };
+  let changed = false;
+
+  if (Array.isArray(blueprint.script)) {
+    updated.script = blueprint.script.map((line: any) => {
+      if (!line || typeof line !== 'object' || line.speaker !== oldName) return line;
+      changed = true;
+      return { ...line, speaker: newName };
+    });
+  }
+
+  for (const key of ['cast', 'canonical_cast', 'character_voices', 'characters']) {
+    const collection = blueprint[key];
+    if (!collection || typeof collection !== 'object') continue;
+    if (Array.isArray(collection)) {
+      if (key !== 'characters') continue;
+      updated[key] = collection.map((item: any) => {
+        if (typeof item === 'string' && item === oldName) {
+          changed = true;
+          return newName;
+        }
+        if (!item || typeof item !== 'object') return item;
+        const renamed = { ...item };
+        for (const field of ['name', 'character', 'id']) {
+          if (renamed[field] === oldName) {
+            renamed[field] = newName;
+            changed = true;
+          }
+        }
+        return renamed;
+      });
+    } else if (Object.hasOwn(collection, oldName)) {
+      updated[key] = { ...collection, [newName]: collection[oldName] };
+      delete updated[key][oldName];
+      changed = true;
+    }
+  }
+
+  return changed ? updated : null;
+}
 
 function getCharacterVoiceOptions(blueprint: any, character?: string) {
   if (!character) return [{ label: 'Narrator – Clear & Neutral', id: 'en-US-AriaNeural' }];
@@ -116,6 +173,7 @@ export default function HomePage() {
   const [editCharacter, setEditCharacter] = useState('Narrator');
   const [editTone, setEditTone] = useState('Neutral');
   const [selectedCharacter, setSelectedCharacter] = useState('');
+  const [characterNameDraft, setCharacterNameDraft] = useState('');
   const [characterVoice, setCharacterVoice] = useState('en-US-AriaNeural');
   const [characterGender, setCharacterGender] = useState<'Male' | 'Female' | 'Disembodied'>('Female');
   const [voiceOptionsByGender, setVoiceOptionsByGender] = useState(() => ({
@@ -227,6 +285,26 @@ export default function HomePage() {
   const refreshVoiceOptions = () => {
     const options = shuffleVoiceIds(getVoiceIdsForGender(characterGender)).slice(0, 5);
     setVoiceOptionsByGender((current) => ({ ...current, [characterGender]: options }));
+  };
+
+  const selectCharacter = (name: string) => {
+    const source = chaptersSorted.find((chapter) => blueprintHasCharacter(chapter.json_blueprint, name))?.json_blueprint
+      || studioData?.json_blueprint || {};
+    const profile = source.canonical_cast?.[name] || source.characters?.[name] || {};
+    const storedVoice = source.character_voices?.[name] || profile.voice_id;
+    const genderValue = String(profile.gender || source.cast?.[name] || '').toLowerCase();
+    const gender = (genderValue === 'male' ? 'Male'
+      : genderValue === 'disembodied' ? 'Disembodied'
+        : genderValue === 'female' ? 'Female'
+          : getVoiceGender(storedVoice) || 'Female') as 'Male' | 'Female' | 'Disembodied';
+    const expectedVoiceGender = gender === 'Male' ? 'Male' : 'Female';
+    const storedVoiceGender = getVoiceGender(storedVoice);
+    setSelectedCharacter(name);
+    setCharacterNameDraft(name);
+    setCharacterGender(gender);
+    setCharacterVoice(storedVoice && (!storedVoiceGender || storedVoiceGender === expectedVoiceGender)
+      ? storedVoice
+      : getDefaultVoiceId(gender));
   };
 
   const refreshProjects = async (current = session) => {
@@ -445,6 +523,54 @@ export default function HomePage() {
     finally { setSavingCharacter(false); }
   };
 
+  const saveCharacterName = async () => {
+    if (!session || !selectedCharacter) return;
+    const newName = characterNameDraft.trim();
+    if (!newName) { setApiError('Character name cannot be empty.'); return; }
+    if (newName === selectedCharacter) return;
+    if (characters.some((name) => name !== selectedCharacter && name.toLocaleLowerCase() === newName.toLocaleLowerCase())
+      || chaptersSorted.some((chapter) => blueprintHasCharacter(chapter.json_blueprint, newName))) {
+      setApiError(`A character named "${newName}" already exists.`);
+      return;
+    }
+
+    const oldName = selectedCharacter;
+    const changes = chaptersSorted.map((chapter) => ({
+      chapter,
+      blueprint: renameCharacterInBlueprint(chapter.json_blueprint, oldName, newName),
+    }));
+    if (!changes.some((change) => change.blueprint)) {
+      setApiError('Could not find this character in any saved chapter blueprint.');
+      return;
+    }
+
+    setSavingCharacter(true);
+    setApiError('');
+    try {
+      const updated = await Promise.all(changes.map(async ({ chapter, blueprint: nextBlueprint }) => {
+        if (!nextBlueprint) return chapter;
+        const savedRows = await foleyvoxApi.saveChapterBlueprint(session.access_token, chapter.id, nextBlueprint);
+        const savedChapter = Array.isArray(savedRows) ? savedRows.find((row) => row.id === chapter.id) : undefined;
+        if (!savedChapter?.json_blueprint || (Array.isArray(savedChapter.json_blueprint.script) && savedChapter.json_blueprint.script.some((line: any) => line?.speaker === oldName))) {
+          throw new Error(`Supabase did not persist the character rename for Chapter ${chapter.chapter_number}.`);
+        }
+        return { ...chapter, json_blueprint: savedChapter.json_blueprint };
+      }));
+      setChapters(updated);
+      if (studioData) {
+        setStudioData((current) => current
+          ? { ...current, json_blueprint: updated.find((chapter) => chapter.id === current.id)?.json_blueprint || current.json_blueprint }
+          : current);
+      }
+      setSelectedCharacter(newName);
+      setCharacterNameDraft(newName);
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : 'Could not save the character rename.');
+    } finally {
+      setSavingCharacter(false);
+    }
+  };
+
   const saveCharacterVoice = async () => {
     if (!session || !selectedCharacter) return;
     setSavingCharacter(true); setApiError('');
@@ -594,14 +720,14 @@ export default function HomePage() {
         </div> : screen === 'projects' ? <section className={styles.simplePage}><p className={styles.charactersHeading}>YOUR LIBRARY</p><h1>Projects</h1>{projects.length ? <div className={styles.projectLibrary}>{projects.map((project) => <div className={styles.libraryProjectWrap} key={project.id}><button type="button" className={styles.libraryProject} onClick={() => openProject(project)}><Folder size={20} /><span><strong>{project.title}</strong><small>{project.status} · {new Date(project.created_at).toLocaleDateString()}</small></span><ChevronRight size={17} /></button><button type="button" className={styles.deleteProjectButton} aria-label={`Delete ${project.title || 'project'}`} title="Delete project" disabled={deletingProjectId !== null} onClick={() => void deleteProject(project.id)}>{deletingProjectId === project.id ? <LoaderCircle size={16} className={styles.spinIcon} /> : <Trash2 size={16} />}</button></div>)}</div> : <p className={styles.emptyProjects}>Your productions will appear here.</p>}</section> : screen === 'settings' ? <section className={styles.simplePage}><p className={styles.charactersHeading}>PREFERENCES</p><h1>Settings</h1><div className={styles.settingsPanel}><div><span><strong>Sound effects</strong><small>Include sound cues in your production workflow.</small></span><button className={soundEffectsEnabled ? styles.toggleOn : styles.toggleOff} onClick={() => setSoundEffectsEnabled((v) => !v)}>{soundEffectsEnabled ? 'On' : 'Off'}</button></div><div><span><strong>Automatic voice preview</strong><small>Preview voice selections when you change a model.</small></span><button className={autoPreviewEnabled ? styles.toggleOn : styles.toggleOff} onClick={() => setAutoPreviewEnabled((v) => !v)}>{autoPreviewEnabled ? 'On' : 'Off'}</button></div></div><div className={styles.plansSection}><p>CHOOSE YOUR PRODUCTION PLAN</p><h2>Plans &amp; Pricing</h2><div className={styles.planGrid}><article><h3>Free</h3><strong>$0<small>/mo</small></strong><ul><li>Basic manuscript workflow</li><li>Limited render credits</li></ul><Button variant="outline" disabled={adPlaying} onClick={watchAdForCredit}>{adPlaying ? 'Playing demo…' : 'Watch Ad for 1 Render Credit'}</Button><small>{adCredits} demo credit{adCredits === 1 ? '' : 's'} added this session</small></article><article className={styles.featuredPlan}><span>FOR INDIE AUTHORS</span><h3>Indie</h3><strong>$15<small>/mo</small></strong><ul><li>More monthly render credits</li><li>Full character and chapter editing</li><li>Standard audio exports</li></ul><Button variant="outline" onClick={() => setToastMessage('Indie checkout will be connected when billing is enabled.')}>Choose Indie</Button></article><article><h3>Studio</h3><strong>$49<small>/mo</small></strong><ul><li>Higher render allowance</li><li>Priority rendering</li><li>Advanced production workflow</li></ul><Button variant="outline" onClick={() => setToastMessage('Studio checkout will be connected when billing is enabled.')}>Choose Studio</Button></article></div><small className={styles.billingNote}>Plan prices are prototype UI only. Subscription checkout and real credit enforcement are not connected.</small></div></section> : screen === 'profile' ? <section className={styles.simplePage}><p className={styles.charactersHeading}>YOUR ACCOUNT</p><h1>Profile</h1><div className={styles.settingsPanel}><div><span><strong>Email address</strong><small>{session.user.email || 'Your FoleyVox account'}</small></span></div><div><span><strong>Account</strong><small>Signed in to FoleyVox</small></span><Button variant="outline" onClick={logout}>Sign Out</Button></div></div></section> : screen === 'characters' ? <><section className={styles.workspaceBar}><div><small>PROJECT WORKSPACE</small><strong>{fileName.replace(/\.txt$/i, '')}</strong></div><div><button className={styles.workspaceTab} onClick={() => setScreen('studio')}><AudioLines size={15} /> Studio</button><button className={styles.workspaceTabActive} onClick={() => setScreen('characters')}><UserRound size={15} /> Characters</button></div><button className={styles.backToProjects} onClick={() => { setScreen('projects'); setNav('Projects'); }}>All Projects</button></section><section className={styles.charactersPage}>
           <div className={styles.charactersHeading}><p>THE CAST OF YOUR STORY</p><h1>Characters</h1><span>Choose the voice that will carry each character through the entire book.</span></div>
           <div className={styles.characterWorkspace}>
-            <aside className={styles.characterRoster}><h2>Cast <small>{characters.length}</small></h2>{characters.map((name) => <button key={name} className={selectedCharacter === name ? styles.characterSelected : ''} onClick={() => { setSelectedCharacter(name); const source = studioData?.json_blueprint || chaptersSorted.find((row) => row.json_blueprint)?.json_blueprint || {}; const gender = String(source.cast?.[name] || source.canonical_cast?.[name]?.gender || '').toLowerCase(); setCharacterVoice(source.character_voices?.[name] || source.canonical_cast?.[name]?.voice_id || (gender === 'male' ? maleVoiceIds[0] : femaleVoiceIds[0])); }}><UserRound size={17} /><span>{name}</span><ChevronRight size={15} /></button>)}</aside>
+            <aside className={styles.characterRoster}><h2>Cast <small>{characters.length}</small></h2>{characters.map((name) => <button key={name} className={selectedCharacter === name ? styles.characterSelected : ''} onClick={() => selectCharacter(name)}><UserRound size={17} /><span>{name}</span><ChevronRight size={15} /></button>)}</aside>
             <section className={styles.characterDetail}>{selectedCharacter ? <>
-              <div className={styles.characterPortrait}><UserRound size={34} /></div><p className={styles.characterEyebrow}>CHARACTER PROFILE</p><h2>{selectedCharacter}</h2>
+              <div className={styles.characterPortrait}><UserRound size={34} /></div><p className={styles.characterEyebrow}>CHARACTER PROFILE</p><h2>{selectedCharacter}</h2><div className={styles.characterNameEditor}><input aria-label="Character name" maxLength={80} value={characterNameDraft} onChange={(event) => setCharacterNameDraft(event.target.value)} /><Button size="sm" className={styles.saveButton} disabled={savingCharacter || !characterNameDraft.trim() || characterNameDraft.trim() === selectedCharacter} onClick={saveCharacterName}>{savingCharacter ? 'Saving…' : 'Save Name'}</Button></div>
               <div className={styles.characterStats}><div><small>ROLE / VOICE TYPE</small><strong>{selectedCharacter.toLowerCase() === 'narrator' ? 'Narrator' : characterData.gender}</strong></div><div><small>ALIASES</small><strong>{(Array.isArray(characterData.aliases) ? characterData.aliases : [characterData.aliases || selectedCharacter]).map((alias: any) => String(alias || '').trim()).filter((alias: string, index: number, all: string[]) => alias && alias.toLowerCase() !== selectedCharacter.toLowerCase() && all.findIndex((item) => item.toLowerCase() === alias.toLowerCase()) === index).join(', ') || '—'}</strong></div><div><small>CHAPTER APPEARANCES</small><strong>{(() => { const count = chaptersSorted.filter((row) => (row.json_blueprint?.script || []).some((line: any) => String(line.speaker || '').toLowerCase() === selectedCharacter.toLowerCase())).length; return `${count} ${count === 1 ? 'chapter' : 'chapters'}`; })()}</strong></div></div>
               <div className={styles.characterVoiceBox}><label>GENDER</label><Select value={characterGender} onValueChange={(value) => { const gender = value as 'Male' | 'Female' | 'Disembodied'; const models = getVoiceIdsForGender(gender); setCharacterGender(gender); setCharacterVoice((current) => models.includes(current) ? current : models[0] || current); }}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{['Male', 'Female', 'Disembodied'].map((gender) => <SelectItem key={gender} value={gender}>{gender}</SelectItem>)}</SelectContent></Select><label>AGE RANGE</label><Select value={characterAgeRange} onValueChange={setCharacterAgeRange}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{['Child', 'Teen', 'Adult', 'Elderly'].map((ageRange) => <SelectItem key={ageRange} value={ageRange}>{ageRange}</SelectItem>)}</SelectContent></Select><div className={styles.voiceModelHeader}><label>BASE VOICE MODEL</label><Button size="sm" variant="outline" onClick={refreshVoiceOptions}><RotateCw size={14} /> Refresh Voices</Button></div><Select value={characterVoice} onValueChange={setCharacterVoice}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{filteredVoiceModels.map((item) => <SelectItem key={item.id} value={item.id}>{item.label}</SelectItem>)}</SelectContent></Select><div className={styles.characterVoiceActions}><Button variant="outline" onClick={async () => { if (!session) return; try { const response = await foleyvoxApi.previewVoice(session.access_token, characterVoice, `Hello. I am ${selectedCharacter}.`); const blob = await response.blob(); const url = URL.createObjectURL(blob); const audio = new Audio(url); audio.onended = () => URL.revokeObjectURL(url); await audio.play(); } catch (error) { setApiError(error instanceof Error ? error.message : 'Voice preview failed.'); } }}><Play size={15} /> Preview Voice</Button><Button className={styles.saveButton} disabled={savingCharacter} onClick={saveCharacterVoice}>{savingCharacter ? 'Saving…' : 'Apply to entire book'}</Button></div><p>Profile and voice settings are stored on every chapter blueprint. Re-render chapters to hear the updated performance.</p></div>
             </> : <div className={styles.characterEmpty}>Select a character from the cast to review their profile and voice.</div>}</section>
           </div>
-        </section></> : <><section className={styles.workspaceBar}><div><small>PROJECT WORKSPACE</small><strong>{fileName.replace(/\.txt$/i, '')}</strong></div><div><button className={styles.workspaceTabActive} onClick={() => setScreen('studio')}><AudioLines size={15} /> Studio</button><button className={styles.workspaceTab} onClick={() => { setSelectedCharacter((current) => current || characters[0] || 'Narrator'); setScreen('characters'); }}><UserRound size={15} /> Characters</button></div><button className={styles.backToProjects} onClick={() => { setScreen('projects'); setNav('Projects'); }}>All Projects</button></section><div className={styles.studioLayout}>
+        </section></> : <><section className={styles.workspaceBar}><div><small>PROJECT WORKSPACE</small><strong>{fileName.replace(/\.txt$/i, '')}</strong></div><div><button className={styles.workspaceTabActive} onClick={() => setScreen('studio')}><AudioLines size={15} /> Studio</button><button className={styles.workspaceTab} onClick={() => { selectCharacter(characters.includes(selectedCharacter) ? selectedCharacter : characters[0] || 'Narrator'); setScreen('characters'); }}><UserRound size={15} /> Characters</button></div><button className={styles.backToProjects} onClick={() => { setScreen('projects'); setNav('Projects'); }}>All Projects</button></section><div className={styles.studioLayout}>
           {studioNotice && <div className={styles.apiError} role="status"><span>{studioNotice}</span><button onClick={() => setStudioNotice('')}>Dismiss</button></div>}
           <aside className={styles.chapterPanel}>
             <div className={styles.panelHeader}><h2>Chapters</h2><span className={styles.chapterCount}>{chaptersSorted.length} {chaptersSorted.length === 1 ? 'chapter' : 'chapters'}</span></div>

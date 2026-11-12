@@ -9,7 +9,7 @@ import { foleyvoxApi, type FoleySession } from '../helpers/foleyvoxApi';
 import styles from './_index.module.css';
 
 type Screen = 'home' | 'loading' | 'studio' | 'characters' | 'projects' | 'settings' | 'profile';
-type Track = { id: number; type: 'narrator' | 'character' | 'sfx'; label: string; text: string; left: number; width: number; character?: string; tone?: string };
+type Track = { id: number; type: 'narrator' | 'character' | 'sfx'; label: string; text: string; character?: string; tone?: string };
 type Chapter = { id: string; chapter_number: number; title: string; status: string; json_blueprint?: any; audio_path?: string | null; audio_url?: string | null; duration_seconds?: number | null; error_message?: string | null };
 
 const voiceOptions = ['Mara – Warm & Resolute', 'Mara – Soft & Reflective', 'Mara – Wry & Dry', 'Mara – Fierce & Defiant', 'Mara – Gentle & Hopeful'];
@@ -265,8 +265,8 @@ export default function HomePage() {
     lines.forEach((line: any, index: number) => {
       const speaker = String(line.speaker || 'Narrator');
       const isNarrator = speaker.toLowerCase() === 'narrator';
-      built.push({ id: index + 1, type: isNarrator ? 'narrator' : 'character', label: speaker, character: isNarrator ? undefined : speaker, text: String(line.text || ''), left: Math.min(2 + (index % 5) * 3, 16), width: 72, tone: String(line.tone || '') });
-      if (line.sound && String(line.sound).toLowerCase() !== 'none') built.push({ id: 10000 + index, type: 'sfx', label: 'SFX', text: String(line.sound), left: Math.min(4 + (index % 4) * 4, 20), width: 48 });
+      built.push({ id: index + 1, type: isNarrator ? 'narrator' : 'character', label: speaker, character: isNarrator ? undefined : speaker, text: String(line.text || ''), tone: String(line.tone || '') });
+      if (line.sound && String(line.sound).toLowerCase() !== 'none') built.push({ id: 10000 + index, type: 'sfx', label: 'SFX', text: String(line.sound) });
     });
     return built;
   }, [blueprint]);
@@ -738,11 +738,10 @@ export default function HomePage() {
             <div className={styles.timelineToolbar}><div className={styles.timelineTitle}><span className={styles.liveIndicator} /> <strong>Chapter {String(selectedChapter).padStart(2, '0')}</strong><span>·</span>{editingTitle ? <input className={styles.titleEditInput} value={chapterTitleDraft} autoFocus onChange={(event) => setChapterTitleDraft(event.target.value)} onBlur={saveChapterTitle} onKeyDown={(event) => { if (event.key === 'Enter') saveChapterTitle(); if (event.key === 'Escape') setEditingTitle(false); }} /> : <button className={styles.editableChapterTitle} onClick={() => { setChapterTitleDraft(studioData?.title || `Chapter ${selectedChapter}`); setEditingTitle(true); }}>{studioData?.title || 'Loading chapter…'} ✎</button>}</div><div className={styles.timelineTools}>{searchOpen && <input className={styles.timelineSearch} placeholder="Search dialogue…" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} autoFocus />}<button aria-label="Search timeline" onClick={() => { setSearchOpen((open) => !open); setSearchTerm(''); }}><Search size={17} /></button><Button size="sm" variant="outline" disabled={renderingChapters.has(selectedChapter) || studioLoading || !studioData} onClick={() => rerenderChapter(selectedChapter)}>{renderingChapters.has(selectedChapter) ? 'Rendering…' : studioData?.audio_path || studioData?.audio_url ? 'Re-render Chapter' : 'Render Chapter'}</Button></div></div>
             <div className={styles.timelineScroll}>
               {studioLoading ? <div className={styles.timelineLoading}>Fetching chapter JSON from FoleyVox API…</div> : filteredTracks.length ? <>
-                <div className={styles.timeRuler}><span>00:00</span><span>00:10</span><span>00:20</span><span>00:30</span><span>00:40</span><span>00:50</span></div>
-                <div className={styles.timelineGrid}><div className={styles.playhead} />
+                <div className={styles.timelineGrid}>
                   {filteredTracks.map((track) => <div className={styles.trackRow} key={track.id}>
                     <div className={styles.trackIdentity}><span className={`${styles.trackIcon} ${styles[track.type]}`}>{track.type === 'narrator' ? <Mic2 size={18} /> : track.type === 'character' ? <UserRound size={18} /> : <Activity size={18} />}</span><span className={`${styles.trackName} ${styles[`${track.type}Text`]}`}>{track.label}<i /></span></div>
-                    <div className={styles.trackLane}>{track.type === 'sfx' ? <div className={styles.missingSfx} style={{ left: `${track.left}%`, width: `${track.width}%` }}><span>⚠</span> {track.text} <small>Needs SFX</small></div> : <button type="button" className={`${styles.audioBlock} ${styles[track.type]}`} style={{ left: `${track.left}%`, width: `${track.width}%` }} onClick={() => openTrack(track)}><span className={styles.audioBlockTop}><span>{track.text}</span><small>{track.tone}</small></span><span className={styles.waveform}>{Array.from({ length: 64 }, (_, i) => <i key={i} style={{ height: `${15 + ((i * 17 + track.id * 13) % 72)}%` }} />)}</span></button>}</div>
+                    <div className={styles.trackLane}>{track.type === 'sfx' ? <div className={styles.missingSfx}><span>⚠</span><span>{track.text}</span><small>Needs SFX</small></div> : <button type="button" className={`${styles.audioBlock} ${styles[track.type]}`} onClick={() => openTrack(track)}><span className={styles.audioBlockTop}><span>{track.text}</span><small>{track.tone}</small></span></button>}</div>
                   </div>)}
                 </div>
               </> : <div className={styles.timelineLoading}>{searchTerm ? 'No dialogue lines match your search.' : studioData?.status === 'failed' ? 'This chapter failed to process.' : 'No dialogue lines are present in this chapter blueprint yet.'}</div>}

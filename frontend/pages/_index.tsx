@@ -387,6 +387,13 @@ export default function HomePage() {
   };
 
   const monitorProject = async (id: string, token: string) => {
+    const showProjectFailure = async (message?: string) => {
+      setUploading(false);
+      setScreen('home');
+      setApiError(message || 'Manuscript processing failed.');
+      try { await refreshProjects({ ...session!, access_token: token }); } catch { /* The failure banner does not depend on the project list refresh. */ }
+    };
+
     for (let attempt = 0; attempt < 400; attempt++) {
       if (attempt > 0) await new Promise((resolve) => window.setTimeout(resolve, 3000));
       try {
@@ -395,6 +402,10 @@ export default function HomePage() {
         const status = String(result.project?.status || '').toLowerCase();
         const allReady = rows.length > 0 && rows.every((row) => ['ready', 'completed'].includes(String(row.status || '').toLowerCase()));
         setChapters(rows);
+        if (status === 'failed') {
+          await showProjectFailure(result.project?.error_message);
+          return;
+        }
         if (status === 'ready' || allReady) {
           setProgress(100);
           setSelectedChapter(rows[0]?.chapter_number || 1);
@@ -417,6 +428,10 @@ export default function HomePage() {
           const fallbackStatus = String(fallback.project?.status || '').toLowerCase();
           const fallbackReady = fallbackRows.length > 0 && fallbackRows.every((row) => ['ready', 'completed'].includes(String(row.status || '').toLowerCase()));
           setChapters(fallbackRows);
+          if (fallbackStatus === 'failed') {
+            await showProjectFailure(fallback.project?.error_message);
+            return;
+          }
           if (fallbackStatus === 'ready' || fallbackReady) {
             setProgress(100); setSelectedChapter(fallbackRows[0]?.chapter_number || 1); setStudioData(fallbackRows[0] || null);
             setScreen('studio'); setNav('Projects'); return;

@@ -60,18 +60,9 @@ def process_project(project):
     chapter_records = []
     for number, chapter in enumerate(chapters, start=1):
         log.info("Analyzing project %s chapter %s", project_id, number)
-        try:
-            blueprint = generate_blueprint(
-                chapter["text"], chapter["title"], api_key=gemini_api_key
-            )
-        except Exception as e:
-            log.error(f"Failed to analyze chapter {number}: {e}")
-            # Fallback blueprint
-            blueprint = {
-                "cast": {"Narrator": "Male"}, 
-                "sfx_list": [], 
-                "script": [{"speaker": "Narrator", "text": f"[Analysis failed for chapter {number}. Please try re-rendering.]", "sound": "none", "tone": "neutral"}]
-            }
+        blueprint = generate_blueprint(
+            chapter["text"], chapter["title"], api_key=gemini_api_key
+        )
             
         for name, voice_type in blueprint.get("cast", {}).items():
             all_cast[str(name)] = str(voice_type)

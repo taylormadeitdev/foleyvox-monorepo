@@ -1,0 +1,15 @@
+.selectContent {
+  z-index: 999;
+  border: 1px solid #5b472c;
+  background: #1b1a18;
+  color: #eadfce;
+}
+
+.selectItem {
+  color: #eadfce;
+}
+
+.selectItem:hover,
+.selectItem[data-highlighted] {
+  background: #30271b;
+}

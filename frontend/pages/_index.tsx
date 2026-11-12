@@ -72,6 +72,7 @@ export default function HomePage() {
   const [screen, setScreen] = useState<Screen>('home');
   const [nav, setNav] = useState('Home');
   const [uploading, setUploading] = useState(false);
+  const [cloningDemo, setCloningDemo] = useState(false);
   const [uploadMessage, setUploadMessage] = useState('Preparing your manuscript…');
   const [progress, setProgress] = useState(8);
   const [fileName, setFileName] = useState('');
@@ -296,6 +297,7 @@ export default function HomePage() {
     setApiError(''); setProjectId(project.id); setFileName(project.title || 'Untitled project');
     try {
       const result = await foleyvoxApi.getProject(session.access_token, project.id);
+      setFileName(result.project?.title || project.title || 'Untitled project');
       const rows = (result.chapters || []) as Chapter[];
       setChapters(rows);
       setSelectedChapter(rows[0]?.chapter_number || 1);
@@ -304,6 +306,22 @@ export default function HomePage() {
       if (session.user?.id) showFirstWorkspaceOnboarding(session.user.id);
       if (!rows.length) setApiError(project.error_message || 'This project is still being prepared. You can return to it shortly.');
     } catch (error) { setApiError(error instanceof Error ? error.message : 'Could not open this project.'); }
+  };
+
+  const tryDemoStory = async () => {
+    if (!session || cloningDemo) return;
+    setApiError('');
+    setCloningDemo(true);
+    try {
+      const demo = await foleyvoxApi.cloneDemo(session.access_token);
+      await openProject({ id: demo.project_id });
+      try { await refreshProjects(); }
+      catch (error) { setApiError(error instanceof Error ? error.message : 'Could not refresh projects.'); }
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : 'Could not load the demo story.');
+    } finally {
+      setCloningDemo(false);
+    }
   };
 
   useEffect(() => {
@@ -490,6 +508,7 @@ export default function HomePage() {
               {uploading ? <div className={styles.uploadProgress}><div className={styles.uploadIcon}><CloudUpload size={31} /></div><h3>{uploadMessage}</h3><p>{fileName}</p><div className={styles.fakeProgress}><span style={{ width: `${progress}%` }} /></div><small>Secure upload in progress</small></div> :
                 <FileDropzone className={styles.dropzone} accept=".txt,.md,.docx,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document" maxFiles={1} onFilesSelected={(files) => startProcessing(files[0])} icon={<CloudUpload size={42} strokeWidth={1.4} />} title={<><strong>Upload your Manuscript</strong><span>DRAG & DROP YOUR .TXT, .MD OR .DOCX FILE HERE</span></>} subtitle={<span className={styles.fileTypes}><i>.TXT</i><i>.MD</i><i>.DOCX PREVIEW</i><i>MAX 2 MB</i></span>} />}
             </div>
+            <Button variant="outline" disabled={uploading || cloningDemo} onClick={tryDemoStory}><Sparkles size={16} /> {cloningDemo ? 'Loading demo…' : 'Try Demo Story'}</Button>
             <div className={styles.uploadHint}><Sparkles size={14} /> Your characters, voices, and soundscape—crafted in one place.</div>
             <p className={styles.backendNote}>Markdown is converted to plain text for the current worker. DOCX extraction is a UI preview only for now.</p>
           </section>

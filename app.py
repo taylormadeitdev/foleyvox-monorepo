@@ -45,6 +45,53 @@ def health():
     return jsonify({"status": "healthy", "service": "foleyvox-api"})
 
 
+@app.post("/api/clone-demo")
+def clone_demo():
+    user = current_user()
+    if not user:
+        return auth_error()
+
+    demo_project_id = os.environ.get("DEMO_PROJECT_ID")
+    if not demo_project_id:
+        return jsonify({"error": "Demo project is not configured"}), 500
+
+    demo_result = (supabase.table("projects").select("*")
+                   .eq("id", demo_project_id).limit(1).execute())
+    if not demo_result.data:
+        return jsonify({"error": "Demo project not found"}), 404
+    demo_project = demo_result.data[0]
+
+    demo_chapters = (supabase.table("chapters").select("*")
+                     .eq("project_id", demo_project_id)
+                     .order("chapter_number").execute().data)
+
+    project_result = supabase.table("projects").insert({
+        "user_id": user.id,
+        "title": f"Demo: {demo_project.get('title') or 'Story'}",
+        "status": "ready",
+        "manuscript_path": demo_project.get("manuscript_path"),
+    }).execute()
+    if not project_result.data:
+        return jsonify({"error": "Could not create demo project"}), 500
+    new_project_id = project_result.data[0].get("id")
+    if not new_project_id:
+        return jsonify({"error": "Could not identify the new demo project"}), 500
+
+    chapter_records = [{
+        "project_id": new_project_id,
+        "chapter_number": chapter["chapter_number"],
+        "title": chapter.get("title"),
+        "status": "awaiting_review",
+        "json_blueprint": chapter.get("json_blueprint"),
+        "audio_path": None,
+        "audio_url": None,
+    } for chapter in demo_chapters]
+    if chapter_records:
+        supabase.table("chapters").insert(chapter_records).execute()
+
+    return jsonify({"project_id": new_project_id})
+
+
 @app.post("/api/upload")
 def queue_upload():
     user = current_user()

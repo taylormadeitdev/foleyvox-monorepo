@@ -151,6 +151,7 @@ export default function HomePage() {
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [geminiKey, setGeminiKey] = useState('');
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState('');
   const [screen, setScreen] = useState<Screen>('home');
@@ -444,7 +445,7 @@ export default function HomePage() {
     if (file.size > 2 * 1024 * 1024) { setApiError('Please keep the manuscript under 2 MB for this first live version.'); return; }
     setFileName(file.name); setUploading(true); setUploadMessage('Creating your project…'); setProgress(8);
     try {
-      const project = await foleyvoxApi.createProject(session.access_token, session.user.id, file.name.replace(/\.txt$/i, ''));
+      const project = await foleyvoxApi.createProject(session.access_token, session.user.id, file.name.replace(/\.txt$/i, ''), geminiKey.trim());
       setProjectId(project.id); setUploadMessage('Uploading manuscript securely to Supabase…'); setProgress(18);
       const uploadFile = /\.md$/i.test(file.name) ? new File([await file.text()], file.name.replace(/\.md$/i, '.txt'), { type: 'text/plain' }) : file;
       await foleyvoxApi.uploadManuscript(session.access_token, session.user.id, project.id, uploadFile);
@@ -718,7 +719,12 @@ export default function HomePage() {
             <div className={styles.uploadFrame}>
               <div className={`${styles.uploadCorner} ${styles.tl}`} /><div className={`${styles.uploadCorner} ${styles.tr}`} /><div className={`${styles.uploadCorner} ${styles.bl}`} /><div className={`${styles.uploadCorner} ${styles.br}`} />
               {uploading ? <div className={styles.uploadProgress}><div className={styles.uploadIcon}><CloudUpload size={31} /></div><h3>{uploadMessage}</h3><p>{fileName}</p><div className={styles.fakeProgress}><span style={{ width: `${progress}%` }} /></div><small>Secure upload in progress</small></div> :
-                <FileDropzone className={styles.dropzone} accept=".txt,.md,.docx,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document" maxFiles={1} onFilesSelected={(files) => startProcessing(files[0])} icon={<CloudUpload size={42} strokeWidth={1.4} />} title={<><strong>Upload your Manuscript</strong><span>DRAG & DROP YOUR .TXT, .MD OR .DOCX FILE HERE</span></>} subtitle={<span className={styles.fileTypes}><i>.TXT</i><i>.MD</i><i>.DOCX PREVIEW</i><i>MAX 2 MB</i></span>} />}
+                <>
+                  <div className={styles.authForm} style={{ position: 'relative', zIndex: 1, maxWidth: 460, margin: '0 auto 10px' }}>
+                    <label>Google Gemini API Key<input type="password" autoComplete="off" value={geminiKey} onChange={(event) => setGeminiKey(event.target.value)} /></label>
+                  </div>
+                  <FileDropzone className={styles.dropzone} accept=".txt,.md,.docx,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document" maxFiles={1} onFilesSelected={(files) => startProcessing(files[0])} icon={<CloudUpload size={42} strokeWidth={1.4} />} title={<><strong>Upload your Manuscript</strong><span>DRAG & DROP YOUR .TXT, .MD OR .DOCX FILE HERE</span></>} subtitle={<span className={styles.fileTypes}><i>.TXT</i><i>.MD</i><i>.DOCX PREVIEW</i><i>MAX 2 MB</i></span>} />
+                </>}
             </div>
             <Button className={`${styles.demoButton} ${styles.saveButton}`} disabled={uploading || cloningDemo} onClick={tryDemoStory}><Sparkles size={16} /> {cloningDemo ? 'Loading demo…' : 'Try Demo Story'}</Button>
             <div className={styles.uploadHint}><Sparkles size={14} /> Your characters, voices, and soundscape—crafted in one place.</div>

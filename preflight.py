@@ -56,9 +56,11 @@ def _extract_json(raw: str) -> dict[str, Any]:
         raise ValueError("Blueprint must be a JSON object")
     return result
 
-def _gemini(prompt: str) -> str:
+def _gemini(prompt: str, api_key: str | None = None) -> str:
     """The Key Rotator: Tries every model/key combination until one works."""
-    if not GEMINI_API_KEYS:
+    keys = [api_key] if api_key else [os.getenv("GEMINI_API_KEY"), *GEMINI_API_KEYS]
+    keys = [key for key in keys if key]
+    if not keys:
         raise RuntimeError("No Gemini API keys configured")
 
     payload = {
@@ -70,10 +72,10 @@ def _gemini(prompt: str) -> str:
     }
 
     for model in VALID_MODELS:
-        for key in GEMINI_API_KEYS:
+        for key in keys:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
             try:
-                print(f"    [API] Trying model {model} with key ...{key[-4:]}")
+                print(f"    [API] Trying model {model}")
                 response = requests.post(url, json=payload, timeout=120)
                 
                 if response.status_code in [404, 429, 503]:
@@ -91,7 +93,9 @@ def _gemini(prompt: str) -> str:
                 
     raise RuntimeError("All API keys and models failed.")
 
-def generate_blueprint(chapter_text: str, chapter_title: str) -> dict[str, Any]:
+def generate_blueprint(
+    chapter_text: str, chapter_title: str, api_key: str | None = None
+) -> dict[str, Any]:
     safe_text = chapter_text[:MAX_CHAPTER_CHARS]
     prompt = f"""
 You are an expert audio-drama director. Convert the supplied chapter into a
@@ -109,7 +113,7 @@ Chapter title: {chapter_title}
 CHAPTER:
 {safe_text}
 """
-    data = _extract_json(_gemini(prompt))
+    data = _extract_json(_gemini(prompt, api_key))
     data.setdefault("cast", {})
     data.setdefault("sfx_list", [])
     data.setdefault("script", [])

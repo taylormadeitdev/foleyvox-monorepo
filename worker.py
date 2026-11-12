@@ -44,6 +44,7 @@ def process_project(project):
     project_id = project["id"]
     user_id = project["user_id"]
     path = project.get("manuscript_path")
+    gemini_api_key = project.get("gemini_api_key")
     if not path:
         raise ValueError("Project has no manuscript_path")
     log.info("Starting manuscript project %s", project_id)
@@ -60,7 +61,9 @@ def process_project(project):
     for number, chapter in enumerate(chapters, start=1):
         log.info("Analyzing project %s chapter %s", project_id, number)
         try:
-            blueprint = generate_blueprint(chapter["text"], chapter["title"])
+            blueprint = generate_blueprint(
+                chapter["text"], chapter["title"], api_key=gemini_api_key
+            )
         except Exception as e:
             log.error(f"Failed to analyze chapter {number}: {e}")
             # Fallback blueprint

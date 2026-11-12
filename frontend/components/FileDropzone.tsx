@@ -137,6 +137,14 @@ export const FileDropzone: React.FC<FileDropzoneProps> = ({
           multiple={maxFiles > 1}
           disabled={disabled}
           aria-label="File upload"
+          style={{
+            opacity: 0,
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            cursor: 'pointer',
+          }}
         />
         
         <span className={styles.icon}>{icon}</span>

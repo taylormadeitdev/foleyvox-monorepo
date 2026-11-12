@@ -5,7 +5,7 @@ import { FileDropzone } from '../components/FileDropzone';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/Dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/Select';
 import { Textarea } from '../components/Textarea';
-import { foleyvoxApi, FoleySession } from '../helpers/foleyvoxApi';
+import { foleyvoxApi, type FoleySession } from '../helpers/foleyvoxApi';
 import styles from './_index.module.css';
 
 type Screen = 'home' | 'loading' | 'studio' | 'characters' | 'projects' | 'settings' | 'profile';
@@ -508,7 +508,7 @@ export default function HomePage() {
               {uploading ? <div className={styles.uploadProgress}><div className={styles.uploadIcon}><CloudUpload size={31} /></div><h3>{uploadMessage}</h3><p>{fileName}</p><div className={styles.fakeProgress}><span style={{ width: `${progress}%` }} /></div><small>Secure upload in progress</small></div> :
                 <FileDropzone className={styles.dropzone} accept=".txt,.md,.docx,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document" maxFiles={1} onFilesSelected={(files) => startProcessing(files[0])} icon={<CloudUpload size={42} strokeWidth={1.4} />} title={<><strong>Upload your Manuscript</strong><span>DRAG & DROP YOUR .TXT, .MD OR .DOCX FILE HERE</span></>} subtitle={<span className={styles.fileTypes}><i>.TXT</i><i>.MD</i><i>.DOCX PREVIEW</i><i>MAX 2 MB</i></span>} />}
             </div>
-            <Button variant="outline" disabled={uploading || cloningDemo} onClick={tryDemoStory}><Sparkles size={16} /> {cloningDemo ? 'Loading demo…' : 'Try Demo Story'}</Button>
+            <Button className={`${styles.demoButton} ${styles.saveButton}`} disabled={uploading || cloningDemo} onClick={tryDemoStory}><Sparkles size={16} /> {cloningDemo ? 'Loading demo…' : 'Try Demo Story'}</Button>
             <div className={styles.uploadHint}><Sparkles size={14} /> Your characters, voices, and soundscape—crafted in one place.</div>
             <p className={styles.backendNote}>Markdown is converted to plain text for the current worker. DOCX extraction is a UI preview only for now.</p>
           </section>

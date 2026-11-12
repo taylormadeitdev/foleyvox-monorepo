@@ -19,7 +19,7 @@ const voiceIds: Record<string, string> = {
   'Mara – Gentle & Hopeful': 'en-GB-SoniaNeural', 'Alaric – Steady & Noble': 'en-GB-RyanNeural',
   'Alaric – Weathered & Warm': 'en-US-GuyNeural', 'Alaric – Quiet & Intense': 'en-US-ChristopherNeural',
 };
-const toneOptions = ['Neutral', 'Angry', 'Sad', 'Whispering', 'Joyful', 'Fearful', 'Confident', 'Sarcastic', 'Urgent', 'Tender', 'Hopeful', 'Exhausted'];
+const toneOptions = ['Neutral', 'Angry', 'Sad', 'Whispering', 'Joyful', 'Fearful', 'Confident', 'Sarcastic', 'Urgent'];
 const femaleVoiceIds = [
   'en-US-AriaNeural', 'en-US-AnaNeural', 'en-US-AvaNeural', 'en-US-EmmaNeural',
   'en-US-JennyNeural', 'en-US-MichelleNeural', 'en-US-NancyNeural', 'en-US-SaraNeural',
@@ -246,6 +246,17 @@ export default function HomePage() {
     });
     return [...names].sort((a, b) => a.localeCompare(b));
   }, [chaptersSorted]);
+  const dialogueCharacterOptions = useMemo(() => {
+    const uniqueNames = new Map<string, string>();
+    characters.forEach((name) => {
+      const trimmedName = name.trim();
+      const normalizedName = trimmedName.toLocaleLowerCase();
+      if (trimmedName && normalizedName !== 'narrator' && !uniqueNames.has(normalizedName)) {
+        uniqueNames.set(normalizedName, trimmedName);
+      }
+    });
+    return ['Narrator', ...uniqueNames.values()];
+  }, [characters]);
   const characterData = useMemo(() => {
     const data = blueprint.canonical_cast?.[selectedCharacter] || blueprint.characters?.[selectedCharacter] || {};
     return { ...data, gender: data.gender || blueprint.cast?.[selectedCharacter] || 'Character', aliases: data.aliases || [selectedCharacter] };
@@ -490,7 +501,7 @@ export default function HomePage() {
   const openTrack = (track: Track) => {
     if (track.type === 'sfx') return;
     setActiveTrack(track); setEditCharacter(track.character || 'Narrator');
-    setEditTone(track.tone || 'Neutral'); setDialogue(track.text || ''); setPlaying(false);
+    setEditTone(track.tone && toneOptions.includes(track.tone) ? track.tone : 'Neutral'); setDialogue(track.text || ''); setPlaying(false);
   };
 
   const hearVoice = async () => {
@@ -757,7 +768,7 @@ export default function HomePage() {
         <DialogContent className={styles.voiceDialog}>
           <div className={styles.dialogBrand}><AudioLines size={22} /><span>Foley<span>Vox</span></span></div>
           <DialogHeader><DialogTitle>Edit Dialogue Line</DialogTitle><DialogDescription>Choose who speaks, how the line is delivered, and the words themselves.</DialogDescription></DialogHeader>
-          <div className={styles.voiceField}><label>CHARACTER</label><Select value={editCharacter} onValueChange={setEditCharacter}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{['Narrator', ...characters].map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}</SelectContent></Select></div>
+          <div className={styles.voiceField}><label>CHARACTER</label><Select value={editCharacter} onValueChange={setEditCharacter}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{dialogueCharacterOptions.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}</SelectContent></Select></div>
           <div className={styles.voiceField}><label>TONE / EMOTION</label><Select value={editTone} onValueChange={setEditTone}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{toneOptions.map((tone) => <SelectItem key={tone} value={tone}>{tone}</SelectItem>)}</SelectContent></Select></div>
           <div className={styles.dialogueField}><label>Dialogue</label><Textarea value={dialogue} onChange={(event) => setDialogue(event.target.value)} rows={4} maxLength={500} /><div className={styles.charCount}>{dialogue.length} / 500</div></div>
           <DialogFooter><Button className={styles.saveButton} disabled={savingCharacter} onClick={saveDialogueLine}>{savingCharacter ? 'Saving…' : 'Save Line'}</Button><Button variant="secondary" className={styles.cancelButton} onClick={() => setActiveTrack(null)}>Cancel</Button></DialogFooter>

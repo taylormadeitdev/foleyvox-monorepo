@@ -720,8 +720,10 @@ export default function HomePage() {
               <div className={`${styles.uploadCorner} ${styles.tl}`} /><div className={`${styles.uploadCorner} ${styles.tr}`} /><div className={`${styles.uploadCorner} ${styles.bl}`} /><div className={`${styles.uploadCorner} ${styles.br}`} />
               {uploading ? <div className={styles.uploadProgress}><div className={styles.uploadIcon}><CloudUpload size={31} /></div><h3>{uploadMessage}</h3><p>{fileName}</p><div className={styles.fakeProgress}><span style={{ width: `${progress}%` }} /></div><small>Secure upload in progress</small></div> :
                 <>
-                  <div className={styles.authForm} style={{ position: 'relative', zIndex: 1, maxWidth: 460, margin: '0 auto 10px' }}>
-                    <label>Google Gemini API Key<input type="password" autoComplete="off" value={geminiKey} onChange={(event) => setGeminiKey(event.target.value)} /></label>
+                  <div className={styles.geminiKeyField}>
+                    <label htmlFor="gemini-api-key">Google Gemini API Key</label>
+                    <input id="gemini-api-key" type="text" autoComplete="off" value={geminiKey} onChange={(event) => setGeminiKey(event.target.value)} placeholder="Enter your Google Gemini API Key" />
+                    <small className={styles.geminiKeyHint}>Don&apos;t have a key? Get one for free at <a href="https://aistudio.google.com" target="_blank" rel="noopener noreferrer">aistudio.google.com</a></small>
                   </div>
                   <FileDropzone className={styles.dropzone} accept=".txt,.md,.docx,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document" maxFiles={1} onFilesSelected={(files) => startProcessing(files[0])} icon={<CloudUpload size={42} strokeWidth={1.4} />} title={<><strong>Upload your Manuscript</strong><span>DRAG & DROP YOUR .TXT, .MD OR .DOCX FILE HERE</span></>} subtitle={<span className={styles.fileTypes}><i>.TXT</i><i>.MD</i><i>.DOCX PREVIEW</i><i>MAX 2 MB</i></span>} />
                 </>}

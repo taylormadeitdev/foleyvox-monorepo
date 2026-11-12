@@ -152,8 +152,14 @@ def process_queued_project():
         try:
             process_project(project)
         except Exception as exc:
-            log.exception("Project processing failed: %s", project["id"])
-            update_project(project["id"], status="failed", error_message=str(exc)[:2000])
+            error_message = str(exc).strip() or type(exc).__name__
+            log.exception(
+                "Project processing failed; marking %s as failed: %s",
+                project["id"], error_message,
+            )
+            update_project(
+                project["id"], status="failed", error_message=error_message[:2000]
+            )
         return True
     return False
 

@@ -58,7 +58,10 @@ def _extract_json(raw: str) -> dict[str, Any]:
 
 def _gemini(prompt: str, api_key: str | None = None) -> str:
     """The Key Rotator: Tries every model/key combination until one works."""
-    keys = [api_key] if api_key else [os.getenv("GEMINI_API_KEY"), *GEMINI_API_KEYS]
+    project_api_key = api_key.strip() if api_key else ""
+    keys = [project_api_key] if project_api_key else [
+        os.getenv("GEMINI_API_KEY"), *GEMINI_API_KEYS
+    ]
     keys = [key for key in keys if key]
     if not keys:
         raise RuntimeError("No Gemini API keys configured")
@@ -75,8 +78,8 @@ def _gemini(prompt: str, api_key: str | None = None) -> str:
         for key in keys:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
             try:
-                print(f"    [API] Trying model {model}")
-                response = requests.post(url, json=payload, timeout=120)
+                print(f" [API] Trying {model} with key ending in {key[-4:]}")
+                response = requests.post(url, json=payload, timeout=45)
                 
                 if response.status_code in [404, 429, 503]:
                     print(f"    [API] Failed: {response.status_code}. Trying next...")
@@ -88,7 +91,8 @@ def _gemini(prompt: str, api_key: str | None = None) -> str:
                 return result["candidates"][0]["content"]["parts"][0]["text"]
 
             except Exception as e:
-                print(f"    [API] Error: {e}")
+                safe_error = str(e).replace(key, "[REDACTED]")
+                print(f" [API] Timeout or error: {safe_error}")
                 time.sleep(2)
                 
     raise RuntimeError("All API keys and models failed.")

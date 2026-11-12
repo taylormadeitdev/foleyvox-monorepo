@@ -1,0 +1,174 @@
+"""Authenticated Flask API for the FoleyVox React/Floot frontend."""
+import os
+import tempfile
+from pathlib import Path
+
+from flask import Flask, jsonify, request, send_file
+from flask_cors import CORS
+from supabase import create_client
+import edge_tts
+import asyncio
+
+app = Flask(__name__)
+CORS(app, origins="*")
+app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024
+
+supabase = create_client(
+    os.environ["SUPABASE_URL"],
+    os.environ["SUPABASE_SERVICE_ROLE_KEY"],
+)
+SIGNED_URL_SECONDS = int(os.getenv("SIGNED_URL_SECONDS", "3600"))
+
+
+def current_user():
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None
+    try:
+        return supabase.auth.get_user(auth.split(" ", 1)[1]).user
+    except Exception:
+        return None
+
+
+def owned_project(user, project_id):
+    result = (supabase.table("projects").select("id")
+              .eq("id", project_id).eq("user_id", user.id).limit(1).execute())
+    return bool(result.data)
+
+
+def auth_error():
+    return jsonify({"error": "Unauthorized"}), 401
+
+
+@app.get("/health")
+def health():
+    return jsonify({"status": "healthy", "service": "foleyvox-api"})
+
+
+@app.post("/api/upload")
+def queue_upload():
+    user = current_user()
+    if not user:
+        return auth_error()
+    body = request.get_json(silent=True) or {}
+    project_id = body.get("project_id")
+    manuscript_path = body.get("manuscript_path")
+    if not project_id or not manuscript_path:
+        return jsonify({"error": "project_id and manuscript_path are required"}), 400
+    if not owned_project(user, project_id):
+        return jsonify({"error": "Project not found"}), 404
+    if not manuscript_path.startswith(f"{user.id}/{project_id}/"):
+        return jsonify({"error": "Invalid manuscript storage path"}), 400
+    supabase.table("projects").update({
+        "manuscript_path": manuscript_path,
+        "status": "queued",
+        "error_message": None,
+    }).eq("id", project_id).execute()
+    return jsonify({"status": "queued", "project_id": project_id}), 202
+
+
+@app.get("/api/projects/<project_id>")
+def get_project(project_id):
+    user = current_user()
+    if not user:
+        return auth_error()
+    if not owned_project(user, project_id):
+        return jsonify({"error": "Project not found"}), 404
+    project = supabase.table("projects").select("*").eq("id", project_id).single().execute().data
+    chapters = (supabase.table("chapters").select("*")
+                .eq("project_id", project_id).order("chapter_number").execute().data)
+    for chapter in chapters:
+        path = chapter.get("audio_path")
+        if path and chapter.get("status") == "ready":
+            try:
+                signed = supabase.storage.from_("renders").create_signed_url(path, SIGNED_URL_SECONDS)
+                chapter["audio_url"] = signed.get("signedURL") or signed.get("signedUrl")
+            except Exception:
+                chapter["audio_url"] = None
+    return jsonify({"project": project, "chapters": chapters})
+
+
+@app.get("/api/studio/<project_id>/<int:chapter_num>")
+def get_studio_data(project_id, chapter_num):
+    user = current_user()
+    if not user:
+        return auth_error()
+    if not owned_project(user, project_id):
+        return jsonify({"error": "Project not found"}), 404
+    result = (supabase.table("chapters").select("*")
+              .eq("project_id", project_id)
+              .eq("chapter_number", chapter_num).limit(1).execute())
+    if not result.data:
+        return jsonify({"error": "Chapter not found"}), 404
+    chapter = result.data[0]
+    path = chapter.get("audio_path")
+    if path:
+        try:
+            signed = supabase.storage.from_("renders").create_signed_url(path, SIGNED_URL_SECONDS)
+            chapter["audio_url"] = signed.get("signedURL") or signed.get("signedUrl")
+        except Exception:
+            chapter["audio_url"] = None
+    return jsonify(chapter)
+
+
+@app.post("/api/rerender")
+def rerender():
+    user = current_user()
+    if not user:
+        return auth_error()
+    body = request.get_json(silent=True) or {}
+    project_id, number = body.get("project_id"), body.get("chapter_number")
+    if not project_id or not isinstance(number, int):
+        return jsonify({"error": "project_id and integer chapter_number are required"}), 400
+    if not owned_project(user, project_id):
+        return jsonify({"error": "Project not found"}), 404
+    updated = (supabase.table("chapters").update({"status": "pending", "error_message": None})
+               .eq("project_id", project_id).eq("chapter_number", number).execute())
+    if not updated.data:
+        return jsonify({"error": "Chapter not found"}), 404
+    return jsonify({"status": "queued"}), 202
+
+
+@app.post("/api/preview_voice")
+def preview_voice():
+    user = current_user()
+    if not user:
+        return auth_error()
+    body = request.get_json(silent=True) or {}
+    voice = str(body.get("voice") or "en-US-AriaNeural")
+    text = str(body.get("text") or "").strip()
+    if not text or len(text) > 500:
+        return jsonify({"error": "Preview text must contain 1-500 characters"}), 400
+    # Restrict voice identifiers to Microsoft's standard locale-voice format.
+    import re
+    if not re.fullmatch(r"[a-z]{2,3}-[A-Z]{2,4}-[A-Za-z0-9]+Neural", voice):
+        return jsonify({"error": "Invalid voice identifier"}), 400
+    temp = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False)
+    temp.close()
+    async def generate():
+        await edge_tts.Communicate(text, voice).save(temp.name)
+    try:
+        asyncio.run(generate())
+        response = send_file(temp.name, mimetype="audio/mpeg", as_attachment=False)
+        response.call_on_close(lambda: Path(temp.name).unlink(missing_ok=True))
+        return response
+    except Exception:
+        Path(temp.name).unlink(missing_ok=True)
+        app.logger.exception("Voice preview failed")
+        return jsonify({"error": "Voice preview failed"}), 502
+
+import threading
+from worker import main as worker_main
+
+# Start the worker thread when the module is imported
+def start_worker_thread():
+    print("Starting background worker thread...")
+    worker_main()
+
+# Only start the thread if we are running as a web server (not in a separate test script)
+if os.environ.get("WERKZEUG_RUN_MAIN") != "true" or os.environ.get("RENDER"):
+    worker_thread = threading.Thread(target=start_worker_thread, daemon=True)
+    worker_thread.start()
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "10000")))

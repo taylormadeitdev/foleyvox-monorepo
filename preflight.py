@@ -11,9 +11,9 @@ log = logging.getLogger("foleyvox-preflight")
 
 # The valid models for new Google Cloud accounts
 VALID_MODELS = [
-    "gemini-3.8-flash",
-    "gemini-3.5-flash",
-    "gemini-3.5-flash-lite"
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
 ]
 
 MAX_CHAPTER_CHARS = int(os.environ.get("MAX_CHAPTER_CHARS", "15000"))
@@ -75,11 +75,10 @@ def _gemini(prompt: str, api_keys: list[str] | None = None) -> str:
             try:
                 log.info(f"[API] Trying {model} with key ending in {key[-4:]}")
                 log.info(f"[API] POST to Gemini: {model}")
-                response = requests.post(url, json=payload, timeout=15)
+                response = requests.post(url, json=payload, timeout=30)
                 
-                if response.status_code in [404, 429, 503]:
-                    log.info(f"[API] Failed: {response.status_code}. Trying next...")
-                    time.sleep(2)
+                if response.status_code in [400, 404, 429, 503]:
+                    log.info(f"    [API] Failed: {response.status_code} - {response.text[:200]}")
                     continue
                     
                 response.raise_for_status()

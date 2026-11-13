@@ -11,9 +11,8 @@ log = logging.getLogger("foleyvox-preflight")
 
 # The valid models for new Google Cloud accounts
 VALID_MODELS = [
-    "gemini-3.8-flash",
-    "gemini-3.5-flash",
-    "gemini-3.5-flash-lite",
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
 ]
 
 MAX_CHAPTER_CHARS = int(os.environ.get("MAX_CHAPTER_CHARS", "15000"))

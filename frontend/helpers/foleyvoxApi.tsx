@@ -10,12 +10,72 @@ export type FoleySession = {
   user: { id: string; email?: string };
 };
 
+function saveSession(session: FoleySession | null) {
+  if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  else localStorage.removeItem(SESSION_KEY);
+}
+
+let sessionRefreshPromise: Promise<FoleySession | null> | null = null;
+
+async function getStoredSession(): Promise<FoleySession | null> {
+  const raw = localStorage.getItem(SESSION_KEY);
+  if (!raw) return null;
+
+  let session: FoleySession;
+  try { session = JSON.parse(raw); } catch { saveSession(null); return null; }
+  if (session.expires_at && session.expires_at * 1000 > Date.now() + 60_000) return session;
+  if (!session.refresh_token) { saveSession(null); return null; }
+  if (sessionRefreshPromise) return sessionRefreshPromise;
+
+  sessionRefreshPromise = (async () => {
+    try {
+      const response = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: "POST",
+        headers: { apikey: SUPABASE_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: session.refresh_token }),
+      });
+      const body = await response.text();
+      let refreshed: any = body;
+      try { refreshed = body ? JSON.parse(body) : null; } catch { /* keep response text */ }
+      if (!response.ok) {
+        throw new Error(refreshed?.msg || refreshed?.message || refreshed?.error_description || refreshed?.error || `Supabase session refresh failed (${response.status})`);
+      }
+      if (!refreshed?.access_token) throw new Error("Supabase session refresh returned no access token.");
+
+      const next = {
+        ...refreshed,
+        expires_at: Math.floor(Date.now() / 1000) + (refreshed.expires_in || 3600),
+      } as FoleySession;
+      saveSession(next);
+      return next;
+    } catch {
+      saveSession(null);
+      return null;
+    } finally {
+      sessionRefreshPromise = null;
+    }
+  })();
+  return sessionRefreshPromise;
+}
+
+async function getFreshAccessToken(): Promise<string> {
+  const session = await getStoredSession();
+  if (!session?.access_token) {
+    throw new Error("Your session has expired. Please sign out and sign in again.");
+  }
+  return session.access_token;
+}
+
 async function supabaseFetch(path: string, init: RequestInit = {}, token?: string) {
+  const session = await getStoredSession();
+  if (token && !session) {
+    throw new Error("Your session has expired. Please sign out and sign in again.");
+  }
   const response = await fetch(`${SUPABASE_URL}${path}`, {
     ...init,
     headers: {
       apikey: SUPABASE_KEY,
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(token && session ? { Authorization: `Bearer ${session.access_token}` } : {}),
       ...(init.body ? { "Content-Type": "application/json" } : {}),
       ...init.headers,
     },
@@ -26,16 +86,12 @@ async function supabaseFetch(path: string, init: RequestInit = {}, token?: strin
   return data;
 }
 
-function saveSession(session: FoleySession | null) {
-  if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  else localStorage.removeItem(SESSION_KEY);
-}
-
-async function apiFetch(path: string, token: string, init: RequestInit = {}) {
+async function apiFetch(path: string, _token: string, init: RequestInit = {}) {
+  const accessToken = await getFreshAccessToken();
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${accessToken}`,
       ...(init.body ? { "Content-Type": "application/json" } : {}),
       ...init.headers,
     },
@@ -51,20 +107,7 @@ async function apiFetch(path: string, token: string, init: RequestInit = {}) {
 
 export const foleyvoxApi = {
   async getSession(): Promise<FoleySession | null> {
-    const raw = localStorage.getItem(SESSION_KEY);
-    if (!raw) return null;
-    let session: FoleySession;
-    try { session = JSON.parse(raw); } catch { saveSession(null); return null; }
-    if (session.expires_at && session.expires_at * 1000 > Date.now() + 60_000) return session;
-    if (!session.refresh_token) { saveSession(null); return null; }
-    try {
-      const refreshed = await supabaseFetch("/auth/v1/token?grant_type=refresh_token", {
-        method: "POST", body: JSON.stringify({ refresh_token: session.refresh_token }),
-      });
-      const next = { ...refreshed, expires_at: Math.floor(Date.now() / 1000) + (refreshed.expires_in || 3600) } as FoleySession;
-      saveSession(next);
-      return next;
-    } catch { saveSession(null); return null; }
+    return getStoredSession();
   },
   async signIn(email: string, password: string): Promise<FoleySession> {
     const data = await supabaseFetch("/auth/v1/token?grant_type=password", {
@@ -84,7 +127,13 @@ export const foleyvoxApi = {
     return session;
   },
   async signOut(token: string) {
-    try { await supabaseFetch("/auth/v1/logout", { method: "POST" }, token); } finally { saveSession(null); }
+    try {
+      if (await getStoredSession()) {
+        await supabaseFetch("/auth/v1/logout", { method: "POST" }, token);
+      }
+    } finally {
+      saveSession(null);
+    }
   },
   async listProjects(token: string) {
     return supabaseFetch("/rest/v1/projects?select=*&order=created_at.desc", {}, token) as Promise<any[]>;
@@ -120,9 +169,10 @@ export const foleyvoxApi = {
   async uploadManuscript(token: string, userId: string, projectId: string, file: File) {
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
     const requestedPath = `${userId}/${projectId}/${Date.now()}-${safeName}`;
+    const accessToken = await getFreshAccessToken();
     const storageResponse = await fetch(`${SUPABASE_URL}/storage/v1/object/manuscripts/${requestedPath.split("/").map(encodeURIComponent).join("/")}`, {
       method: "POST",
-      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}`, "Content-Type": file.type || "text/plain", "x-upsert": "false" },
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${accessToken}`, "Content-Type": file.type || "text/plain", "x-upsert": "false" },
       body: file,
     });
     const storageBody = await storageResponse.clone().text();

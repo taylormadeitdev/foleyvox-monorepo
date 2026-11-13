@@ -11,8 +11,8 @@ log = logging.getLogger("foleyvox-preflight")
 
 # The valid models for new Google Cloud accounts
 VALID_MODELS = [
-    "gemini-1.5-flash",
-    "gemini-1.5-pro",
+    "gemini-3.8-flash",
+    "gemini-3.5-flash",
 ]
 
 MAX_CHAPTER_CHARS = int(os.environ.get("MAX_CHAPTER_CHARS", "15000"))
@@ -71,31 +71,42 @@ def _gemini(prompt: str, api_keys: list[str] | None = None) -> str:
     for model in VALID_MODELS:
         for key in keys:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
-            try:
-                log.info(f"[API] Trying {model} with key ending in {key[-4:]}")
-                log.info(f"[API] POST to Gemini: {model}")
-                log.info(f"[API] Payload size: {len(json.dumps(payload))} bytes")
-                response = requests.post(url, json=payload, timeout=60)
-                
-                if response.status_code in [400, 404, 429, 503]:
-                    log.info(f"    [API] Failed: {response.status_code} - {response.text[:200]}")
-                    continue
-                    
-                response.raise_for_status()
-                result = response.json()
-                return result["candidates"][0]["content"]["parts"][0]["text"]
+            for attempt in range(2):
+                try:
+                    log.info(f"[API] Trying {model} with key ending in {key[-4:]}")
+                    log.info(f"[API] POST to Gemini: {model}")
+                    log.info(f"[API] Payload size: {len(json.dumps(payload))} bytes")
+                    response = requests.post(url, json=payload, timeout=60)
 
-            except requests.exceptions.Timeout:
-                log.info("[API] TIMEOUT after 60s")
-                time.sleep(2)
-            except requests.exceptions.ConnectionError as e:
-                safe_error = str(e).replace(key, "[REDACTED]")
-                log.info(f"[API] CONNECTION ERROR: {safe_error}")
-                time.sleep(2)
-            except Exception as e:
-                safe_error = str(e).replace(key, "[REDACTED]")
-                log.info(f"[API] Error: {safe_error}")
-                time.sleep(2)
+                    if response.status_code == 503:
+                        log.info(f"    [API] Failed: {response.status_code} - {response.text[:200]}")
+                        if attempt == 0:
+                            time.sleep(5)
+                            continue
+                        break
+
+                    if response.status_code in [400, 404, 429]:
+                        log.info(f"    [API] Failed: {response.status_code} - {response.text[:200]}")
+                        break
+
+                    response.raise_for_status()
+                    result = response.json()
+                    return result["candidates"][0]["content"]["parts"][0]["text"]
+
+                except requests.exceptions.Timeout:
+                    log.info("[API] TIMEOUT after 60s")
+                    time.sleep(2)
+                    break
+                except requests.exceptions.ConnectionError as e:
+                    safe_error = str(e).replace(key, "[REDACTED]")
+                    log.info(f"[API] CONNECTION ERROR: {safe_error}")
+                    time.sleep(2)
+                    break
+                except Exception as e:
+                    safe_error = str(e).replace(key, "[REDACTED]")
+                    log.info(f"[API] Error: {safe_error}")
+                    time.sleep(2)
+                    break
                 
     raise RuntimeError("All API keys and models failed.")
 

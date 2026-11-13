@@ -97,10 +97,22 @@ export const foleyvoxApi = {
     const response = await apiFetch("/api/clone-demo", token, { method: "POST" });
     return response.json();
   },
-  async createProject(token: string, userId: string, title: string, geminiKey: string) {
+  async createProject(
+    token: string,
+    userId: string,
+    title: string,
+    keys: { key1: string; key2: string; key3: string },
+  ) {
     const rows = await supabaseFetch("/rest/v1/projects?select=*", {
       method: "POST", headers: { Prefer: "return=representation" },
-      body: JSON.stringify({ user_id: userId, title, status: "uploaded", gemini_api_key: geminiKey || null }),
+      body: JSON.stringify({
+        user_id: userId,
+        title,
+        status: "uploaded",
+        gemini_api_key_1: keys.key1 || null,
+        gemini_api_key_2: keys.key2 || null,
+        gemini_api_key_3: keys.key3 || null,
+      }),
     }, token);
     if (!rows?.[0]) throw new Error("Supabase did not return the new project.");
     return rows[0];

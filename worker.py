@@ -44,7 +44,15 @@ def process_project(project):
     project_id = project["id"]
     user_id = project["user_id"]
     path = project.get("manuscript_path")
-    gemini_api_key = project.get("gemini_api_key")
+    api_keys = [
+        key.strip()
+        for key in (
+            project.get("gemini_api_key_1"),
+            project.get("gemini_api_key_2"),
+            project.get("gemini_api_key_3"),
+        )
+        if key and key.strip()
+    ]
     if not path:
         raise ValueError("Project has no manuscript_path")
     log.info("Starting manuscript project %s", project_id)
@@ -61,7 +69,7 @@ def process_project(project):
     for number, chapter in enumerate(chapters, start=1):
         log.info("Analyzing project %s chapter %s", project_id, number)
         blueprint = generate_blueprint(
-            chapter["text"], chapter["title"], api_key=gemini_api_key
+            chapter["text"], chapter["title"], api_keys=api_keys
         )
             
         for name, voice_type in blueprint.get("cast", {}).items():

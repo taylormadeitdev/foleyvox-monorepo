@@ -6,14 +6,6 @@ import time
 from typing import Any
 import requests
 
-# THE KEY ROTATOR SETUP
-GEMINI_API_KEYS = [
-    os.environ.get("GEMINI_API_KEY_1"),
-    os.environ.get("GEMINI_API_KEY_2"),
-    os.environ.get("GEMINI_API_KEY_3")
-]
-GEMINI_API_KEYS = [k for k in GEMINI_API_KEYS if k] # Remove empty ones
-
 # The valid models for new Google Cloud accounts
 VALID_MODELS = [
     "gemini-3.8-flash",
@@ -56,12 +48,12 @@ def _extract_json(raw: str) -> dict[str, Any]:
         raise ValueError("Blueprint must be a JSON object")
     return result
 
-def _gemini(prompt: str, api_key: str | None = None) -> str:
+def _gemini(prompt: str, api_keys: list[str] | None = None) -> str:
     """The Key Rotator: Tries every model/key combination until one works."""
-    project_api_key = api_key.strip() if api_key else ""
-    keys = [project_api_key] if project_api_key else [
-        os.getenv("GEMINI_API_KEY"), *GEMINI_API_KEYS
-    ]
+    keys = [key.strip() for key in (api_keys or []) if key and key.strip()]
+    if not keys:
+        fallback_key = os.getenv("GEMINI_API_KEY")
+        keys = [fallback_key] if fallback_key else []
     keys = [key for key in keys if key]
     if not keys:
         raise RuntimeError("No Gemini API keys configured")
@@ -98,7 +90,7 @@ def _gemini(prompt: str, api_key: str | None = None) -> str:
     raise RuntimeError("All API keys and models failed.")
 
 def generate_blueprint(
-    chapter_text: str, chapter_title: str, api_key: str | None = None
+    chapter_text: str, chapter_title: str, api_keys: list[str] | None = None
 ) -> dict[str, Any]:
     safe_text = chapter_text[:MAX_CHAPTER_CHARS]
     prompt = f"""
@@ -117,7 +109,7 @@ Chapter title: {chapter_title}
 CHAPTER:
 {safe_text}
 """
-    data = _extract_json(_gemini(prompt, api_key))
+    data = _extract_json(_gemini(prompt, api_keys))
     data.setdefault("cast", {})
     data.setdefault("sfx_list", [])
     data.setdefault("script", [])

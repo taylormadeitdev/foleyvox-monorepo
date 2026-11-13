@@ -151,7 +151,9 @@ export default function HomePage() {
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [geminiKey, setGeminiKey] = useState('');
+  const [geminiKey1, setGeminiKey1] = useState('');
+  const [geminiKey2, setGeminiKey2] = useState('');
+  const [geminiKey3, setGeminiKey3] = useState('');
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState('');
   const [screen, setScreen] = useState<Screen>('home');
@@ -460,7 +462,12 @@ export default function HomePage() {
     if (file.size > 2 * 1024 * 1024) { setApiError('Please keep the manuscript under 2 MB for this first live version.'); return; }
     setFileName(file.name); setUploading(true); setUploadMessage('Creating your project…'); setProgress(8);
     try {
-      const project = await foleyvoxApi.createProject(session.access_token, session.user.id, file.name.replace(/\.txt$/i, ''), geminiKey.trim());
+      const project = await foleyvoxApi.createProject(
+        session.access_token,
+        session.user.id,
+        file.name.replace(/\.txt$/i, ''),
+        { key1: geminiKey1.trim(), key2: geminiKey2.trim(), key3: geminiKey3.trim() },
+      );
       setProjectId(project.id); setUploadMessage('Uploading manuscript securely to Supabase…'); setProgress(18);
       const uploadFile = /\.md$/i.test(file.name) ? new File([await file.text()], file.name.replace(/\.md$/i, '.txt'), { type: 'text/plain' }) : file;
       await foleyvoxApi.uploadManuscript(session.access_token, session.user.id, project.id, uploadFile);
@@ -736,8 +743,13 @@ export default function HomePage() {
               {uploading ? <div className={styles.uploadProgress}><div className={styles.uploadIcon}><CloudUpload size={31} /></div><h3>{uploadMessage}</h3><p>{fileName}</p><div className={styles.fakeProgress}><span style={{ width: `${progress}%` }} /></div><small>Secure upload in progress</small></div> :
                 <>
                   <div className={styles.geminiKeyField}>
-                    <label htmlFor="gemini-api-key">Google Gemini API Key</label>
-                    <input id="gemini-api-key" type="text" autoComplete="off" value={geminiKey} onChange={(event) => setGeminiKey(event.target.value)} placeholder="Enter your Google Gemini API Key" />
+                    <label htmlFor="gemini-api-key-1">Gemini API Key 1</label>
+                    <input id="gemini-api-key-1" type="text" autoComplete="off" value={geminiKey1} onChange={(event) => setGeminiKey1(event.target.value)} placeholder="Enter your Google Gemini API Key" />
+                    <label htmlFor="gemini-api-key-2">Gemini API Key 2 (Optional)</label>
+                    <input id="gemini-api-key-2" type="text" autoComplete="off" value={geminiKey2} onChange={(event) => setGeminiKey2(event.target.value)} placeholder="Optional backup key" />
+                    <label htmlFor="gemini-api-key-3">Gemini API Key 3 (Optional)</label>
+                    <input id="gemini-api-key-3" type="text" autoComplete="off" value={geminiKey3} onChange={(event) => setGeminiKey3(event.target.value)} placeholder="Optional backup key" />
+                    <small className={styles.geminiKeyHint}>Add up to 3 keys to avoid rate limits on large books.</small>
                     <small className={styles.geminiKeyHint}>Don&apos;t have a key? Get one for free at <a href="https://aistudio.google.com" target="_blank" rel="noopener noreferrer">aistudio.google.com</a></small>
                   </div>
                   <FileDropzone className={styles.dropzone} accept=".txt,.md,.docx,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document" maxFiles={1} onFilesSelected={(files) => startProcessing(files[0])} icon={<CloudUpload size={42} strokeWidth={1.4} />} title={<><strong>Upload your Manuscript</strong><span>DRAG & DROP YOUR .TXT, .MD OR .DOCX FILE HERE</span></>} subtitle={<span className={styles.fileTypes}><i>.TXT</i><i>.MD</i><i>.DOCX PREVIEW</i><i>MAX 2 MB</i></span>} />

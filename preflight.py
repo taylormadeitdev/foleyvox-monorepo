@@ -75,7 +75,8 @@ def _gemini(prompt: str, api_keys: list[str] | None = None) -> str:
             try:
                 log.info(f"[API] Trying {model} with key ending in {key[-4:]}")
                 log.info(f"[API] POST to Gemini: {model}")
-                response = requests.post(url, json=payload, timeout=30)
+                log.info(f"[API] Payload size: {len(json.dumps(payload))} bytes")
+                response = requests.post(url, json=payload, timeout=60)
                 
                 if response.status_code in [400, 404, 429, 503]:
                     log.info(f"    [API] Failed: {response.status_code} - {response.text[:200]}")
@@ -85,9 +86,16 @@ def _gemini(prompt: str, api_keys: list[str] | None = None) -> str:
                 result = response.json()
                 return result["candidates"][0]["content"]["parts"][0]["text"]
 
+            except requests.exceptions.Timeout:
+                log.info("[API] TIMEOUT after 60s")
+                time.sleep(2)
+            except requests.exceptions.ConnectionError as e:
+                safe_error = str(e).replace(key, "[REDACTED]")
+                log.info(f"[API] CONNECTION ERROR: {safe_error}")
+                time.sleep(2)
             except Exception as e:
                 safe_error = str(e).replace(key, "[REDACTED]")
-                log.info(f"[API] Timeout or error: {safe_error}")
+                log.info(f"[API] Error: {safe_error}")
                 time.sleep(2)
                 
     raise RuntimeError("All API keys and models failed.")

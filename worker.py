@@ -45,14 +45,11 @@ def process_project(project):
     user_id = project["user_id"]
     path = project.get("manuscript_path")
     api_keys = [
-        key.strip()
-        for key in (
-            project.get("gemini_api_key_1"),
-            project.get("gemini_api_key_2"),
-            project.get("gemini_api_key_3"),
-        )
-        if key and key.strip()
+        project.get("gemini_api_key_1"),
+        project.get("gemini_api_key_2"),
+        project.get("gemini_api_key_3"),
     ]
+    api_keys = [key.strip() for key in api_keys if key and key.strip()]
     if not path:
         raise ValueError("Project has no manuscript_path")
     log.info("Starting manuscript project %s", project_id)
@@ -153,7 +150,10 @@ def process_pending_renders():
 
 
 def process_queued_project():
-    queued = (supabase.table("projects").select("*")
+    queued = (supabase.table("projects").select(
+                  "id,user_id,manuscript_path,gemini_api_key_1,"
+                  "gemini_api_key_2,gemini_api_key_3"
+              )
               .eq("status", "queued").order("created_at").limit(1).execute().data)
     if queued:
         project = queued[0]

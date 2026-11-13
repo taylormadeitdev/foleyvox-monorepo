@@ -1,10 +1,13 @@
 """Manuscript parsing and Gemini chapter blueprint generation."""
 import json
+import logging
 import os
 import re
 import time
 from typing import Any
 import requests
+
+log = logging.getLogger("foleyvox-preflight")
 
 # The valid models for new Google Cloud accounts
 VALID_MODELS = [
@@ -70,11 +73,12 @@ def _gemini(prompt: str, api_keys: list[str] | None = None) -> str:
         for key in keys:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
             try:
-                print(f" [API] Trying {model} with key ending in {key[-4:]}")
-                response = requests.post(url, json=payload, timeout=45)
+                log.info(f"[API] Trying {model} with key ending in {key[-4:]}")
+                log.info(f"[API] POST to Gemini: {model}")
+                response = requests.post(url, json=payload, timeout=15)
                 
                 if response.status_code in [404, 429, 503]:
-                    print(f"    [API] Failed: {response.status_code}. Trying next...")
+                    log.info(f"[API] Failed: {response.status_code}. Trying next...")
                     time.sleep(2)
                     continue
                     
@@ -84,7 +88,7 @@ def _gemini(prompt: str, api_keys: list[str] | None = None) -> str:
 
             except Exception as e:
                 safe_error = str(e).replace(key, "[REDACTED]")
-                print(f" [API] Timeout or error: {safe_error}")
+                log.info(f"[API] Timeout or error: {safe_error}")
                 time.sleep(2)
                 
     raise RuntimeError("All API keys and models failed.")
